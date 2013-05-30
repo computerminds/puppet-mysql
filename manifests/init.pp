@@ -109,4 +109,5 @@ class mysql( $server_status = 'running' ) {
     default: {
 
     }
+  }
 }
