@@ -3,7 +3,7 @@
 # Examples
 #
 #   include mysql
-class mysql {
+class mysql( $server_status = 'running' ) {
   require mysql::config
   require homebrew
 
@@ -69,8 +69,7 @@ class mysql {
   }
 
   service { 'dev.mysql':
-    ensure  => running,
-    notify  => Exec['wait-for-mysql'],
+    ensure  => $server_status,
   }
 
   service { 'com.boxen.mysql': # replaced by dev.mysql
@@ -83,21 +82,31 @@ class mysql {
     require => File[$boxen::config::envdir]
   }
 
-  $nc = "/usr/bin/nc -z localhost ${mysql::config::port}"
+  case $server_status {
 
-  exec { 'wait-for-mysql':
-    command     => "while ! ${nc}; do sleep 1; done",
-    provider    => shell,
-    timeout     => 30,
-    refreshonly => true
-  }
+    'running': {
 
-  exec { 'mysql-tzinfo-to-sql':
-    command     => "mysql_tzinfo_to_sql /usr/share/zoneinfo | \
-      mysql -u root mysql -P ${mysql::config::port} -S ${mysql::config::socket}",
-    provider    => shell,
-    creates     => "${mysql::config::datadir}/.tz_info_created",
-    subscribe   => Exec['wait-for-mysql'],
-    refreshonly => true
-  }
+      $nc = "/usr/bin/nc -z localhost ${mysql::config::port}"
+
+      exec { 'wait-for-mysql':
+        command     => "while ! ${nc}; do sleep 1; done",
+        provider    => shell,
+        timeout     => 30,
+        refreshonly => true,
+        subscribe => Service['dev.mysql'],
+      }
+
+      exec { 'mysql-tzinfo-to-sql':
+        command     => "mysql_tzinfo_to_sql /usr/share/zoneinfo | \
+          mysql -u root mysql -P ${mysql::config::port} -S ${mysql::config::socket}",
+        provider    => shell,
+        creates     => "${mysql::config::datadir}/.tz_info_created",
+        subscribe   => Exec['wait-for-mysql'],
+        refreshonly => true
+      }
+    }
+
+    default: {
+
+    }
 }
